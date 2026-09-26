@@ -1,30 +1,23 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { useDispatch, useSelector } from "react-redux";
-import createSagaMiddleware from "redux-saga";
-import rootSaga from "./rootSaga";
-import contentDetailsReducer from "./slices/contentDetailsSlice";
-import impressionPromptReducer from "./slices/impressionPromptSlice";
-import searchReducer from "./slices/searchSlice";
+import "@/store/api/register";
+import { baseApi } from "@/store/api/base-api";
 import authReducer from "./slices/authSlice";
+import impressionPromptReducer from "./slices/impressionPromptSlice";
 import libraryReducer from "./slices/librarySlice";
 import toastReducer from "./slices/toastSlice";
 
-const sagaMiddleware = createSagaMiddleware();
-
 export const store = configureStore({
   reducer: {
-    contentDetails: contentDetailsReducer,
+    [baseApi.reducerPath]: baseApi.reducer,
     impressionPrompt: impressionPromptReducer,
-    search: searchReducer,
     auth: authReducer,
     library: libraryReducer,
     toast: toastReducer,
   },
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware({ thunk: false }).concat(sagaMiddleware),
+    getDefaultMiddleware().concat(baseApi.middleware),
 });
-
-sagaMiddleware.run(rootSaga);
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

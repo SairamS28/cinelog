@@ -15,9 +15,9 @@ import {
 } from "@/lib/media/watch-status";
 import { cn } from "@/lib/utils";
 import type {
-  ContentMutationStatus,
   ContentMutation,
-} from "@/store/slices/contentDetailsSlice";
+  ContentMutationStatus,
+} from "@/store/api/content-types";
 
 type ProgressStatusProps = {
   id?: number;

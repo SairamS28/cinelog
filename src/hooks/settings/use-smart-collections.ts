@@ -1,21 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/http/client";
+import { useCallback } from "react";
 import type {
   CollectionFilterItem,
   CollectionSortItem,
   SmartCollectionWithFilters,
 } from "@/lib/types";
+import { apiErrorMessage } from "@/store/api/base-api";
+import {
+  collectionsApi,
+  useCreateCollectionMutation,
+  useDeleteCollectionMutation,
+  useGetCollectionsQuery,
+  useReorderCollectionsMutation,
+  useUpdateCollectionMutation,
+} from "@/store/api/collections-api";
 import { useAppDispatch } from "@/store";
 import { showToast } from "@/store/slices/toastSlice";
 
 export function useSmartCollections() {
   const dispatch = useAppDispatch();
-  const [collections, setCollections] = useState<SmartCollectionWithFilters[]>(
-    [],
-  );
-  const [isLoading, setIsLoading] = useState(true);
+  const result = useGetCollectionsQuery();
+  const [createCollection] = useCreateCollectionMutation();
+  const [updateCollection] = useUpdateCollectionMutation();
+  const [removeCollection] = useDeleteCollectionMutation();
+  const [reorder] = useReorderCollectionsMutation();
+  const collections = result.data?.collections ?? [];
 
   const notify = useCallback(
     (message: string, variant: "success" | "error") => {
@@ -25,48 +35,12 @@ export function useSmartCollections() {
   );
 
   const loadCollections = useCallback(async () => {
-    setIsLoading(true);
     try {
-      const res = await fetch("/api/collections");
-      if (res.ok) {
-        const data = await res.json();
-        setCollections(data.collections ?? data.data?.collections ?? []);
-      } else {
-        notify("Failed to load smart collections.", "error");
-      }
-    } catch {
-      notify("Failed to load smart collections.", "error");
-    } finally {
-      setIsLoading(false);
+      await result.refetch().unwrap();
+    } catch (error) {
+      notify(apiErrorMessage(error, "Failed to load smart collections."), "error");
     }
-  }, [notify]);
-
-  useEffect(() => {
-    let ignore = false;
-
-    void (async () => {
-      try {
-        const res = await fetch("/api/collections");
-        if (ignore) return;
-        if (res.ok) {
-          const data = await res.json();
-          setCollections(data.collections ?? data.data?.collections ?? []);
-        } else {
-          notify("Failed to load smart collections.", "error");
-        }
-      } catch {
-        if (!ignore) {
-          notify("Failed to load smart collections.", "error");
-        }
-      } finally {
-        if (!ignore) setIsLoading(false);
-      }
-    })();
-
-    return () => {
-      ignore = true;
-    };
-  }, [notify]);
+  }, [notify, result]);
 
   async function saveCollection(payload: {
     name: string;
@@ -88,86 +62,57 @@ export function useSmartCollections() {
       sorts: payload.sorts,
     };
 
-    if (payload.editingId) {
-      const res = await apiFetch(`/api/collections/${payload.editingId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        notify(data.error || "Failed to update collection.", "error");
-        return false;
+    try {
+      if (payload.editingId) {
+        await updateCollection({ id: payload.editingId, body }).unwrap();
+        notify("Collection updated successfully.", "success");
+        return true;
       }
-      const updated = data.collection ?? data.data?.collection;
-      if (updated) {
-        setCollections((prev) =>
-          prev.map((item) => (item.id === payload.editingId ? updated : item)),
-        );
-      }
-      notify("Collection updated successfully.", "success");
+      await createCollection(body).unwrap();
+      notify("Collection created successfully.", "success");
       return true;
-    }
-
-    const res = await apiFetch("/api/collections", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      notify(data.error || "Failed to create collection.", "error");
+    } catch (error) {
+      notify(
+        apiErrorMessage(
+          error,
+          payload.editingId
+            ? "Failed to update collection."
+            : "Failed to create collection.",
+        ),
+        "error",
+      );
       return false;
     }
-    await loadCollections();
-    notify("Collection created successfully.", "success");
-    return true;
   }
 
   async function deleteCollection(id: number) {
     try {
-      const res = await apiFetch(`/api/collections/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) {
-        notify(data.error || "Failed to delete collection.", "error");
-        return false;
-      }
-      setCollections(data.collections ?? data.data?.collections ?? []);
+      await removeCollection(id).unwrap();
       notify("Collection deleted.", "success");
       return true;
-    } catch {
-      notify("Failed to delete collection.", "error");
+    } catch (error) {
+      notify(apiErrorMessage(error, "Failed to delete collection."), "error");
       return false;
     }
   }
 
   async function reorderCollections(orderedIds: number[]) {
-    setCollections((prev) => {
-      const map = new Map(prev.map((col) => [col.id, col]));
-      return orderedIds
-        .map((id, index) => {
+    const patch = dispatch(
+      collectionsApi.util.updateQueryData("getCollections", undefined, (draft) => {
+        const map = new Map(draft.collections.map((col) => [col.id, col]));
+        draft.collections = orderedIds.flatMap((id, index) => {
           const col = map.get(id);
-          return col ? { ...col, displayOrder: index } : null;
-        })
-        .filter((col): col is SmartCollectionWithFilters => col !== null);
-    });
+          return col ? [{ ...col, displayOrder: index }] : [];
+        });
+      }),
+    );
 
     try {
-      const res = await apiFetch("/api/collections/reorder", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderedIds }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        notify(data.error || "Failed to reorder collections.", "error");
-        await loadCollections();
-        return false;
-      }
+      await reorder({ orderedIds }).unwrap();
       return true;
-    } catch {
-      notify("Failed to reorder collections.", "error");
-      await loadCollections();
+    } catch (error) {
+      patch.undo();
+      notify(apiErrorMessage(error, "Failed to reorder collections."), "error");
       return false;
     }
   }
@@ -181,33 +126,17 @@ export function useSmartCollections() {
     }>,
   ) {
     try {
-      const res = await apiFetch(`/api/collections/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        notify(data.error || "Failed to update collection.", "error");
-        return false;
-      }
-      const data = await res.json();
-      const updated = data.collection ?? data.data?.collection;
-      if (updated) {
-        setCollections((prev) =>
-          prev.map((item) => (item.id === id ? updated : item)),
-        );
-      }
+      await updateCollection({ id, body: patch }).unwrap();
       return true;
-    } catch {
-      notify("Failed to update collection.", "error");
+    } catch (error) {
+      notify(apiErrorMessage(error, "Failed to update collection."), "error");
       return false;
     }
   }
 
   return {
     collections,
-    isLoading,
+    isLoading: result.isLoading,
     loadCollections,
     saveCollection,
     deleteCollection,
@@ -215,3 +144,5 @@ export function useSmartCollections() {
     patchCollection,
   };
 }
+
+export type { SmartCollectionWithFilters };

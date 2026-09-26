@@ -193,13 +193,7 @@ export function LandingPage() {
   const scrollRef = useScrollReveal();
   const { theme, mounted } = useTheme();
   const isDark = mounted ? theme === "dark" : true;
-  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
-
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      window.location.replace(user.hasCompletedOnboarding ? "/" : "/onboarding");
-    }
-  }, [isAuthenticated, user]);
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
 
   if (isAuthenticated) {
     return (
@@ -215,12 +209,12 @@ export function LandingPage() {
       <LandingNav />
 
       {/* ═══ HERO ═══ */}
-      <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-4 pt-20 pb-16 sm:px-6">
+      <section className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 pt-20 pb-16 sm:px-6">
         {/* Background effects */}
         <div className="pointer-events-none absolute inset-0 select-none overflow-hidden">
-          <div className="absolute -left-32 top-1/4 h-[500px] w-[500px] rounded-full bg-brand-primary-container/8 blur-[100px] landing-glow" />
-          <div className="absolute -right-32 bottom-1/4 h-[400px] w-[400px] rounded-full bg-brand-tertiary-container/8 blur-[100px] landing-glow" />
-          <div className="absolute left-1/2 top-0 h-[600px] w-[1px] -translate-x-1/2 bg-gradient-to-b from-transparent via-outline-variant/30 to-transparent" />
+          <div className="absolute -left-32 top-1/4 h-125 w-125 rounded-full bg-brand-primary-container/8 blur-[100px] landing-glow" />
+          <div className="absolute -right-32 bottom-1/4 h-100 w-100 rounded-full bg-brand-tertiary-container/8 blur-[100px] landing-glow" />
+          <div className="absolute left-1/2 top-0 h-150 w-px -translate-x-1/2 bg-linear-to-b from-transparent via-outline-variant/30 to-transparent" />
         </div>
 
         <div className="relative z-10 mx-auto flex max-w-4xl flex-col items-center text-center">
@@ -233,7 +227,7 @@ export function LandingPage() {
           {/* Headline */}
           <h1 className="landing-hero-enter-delay mt-6 font-heading text-4xl font-extrabold tracking-tight text-on-surface sm:text-5xl md:text-6xl lg:text-7xl">
             Every frame, every story,{" "}
-            <span className="bg-gradient-to-r from-brand-primary to-brand-tertiary bg-clip-text text-transparent">
+            <span className="bg-linear-to-r from-brand-primary to-brand-tertiary bg-clip-text text-transparent">
               logged your way.
             </span>
           </h1>
@@ -341,7 +335,7 @@ export function LandingPage() {
       >
         {/* Background glow */}
         <div className="pointer-events-none absolute inset-0 select-none">
-          <div className="absolute left-1/2 top-1/2 h-[600px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-primary-container/5 blur-[120px]" />
+          <div className="absolute left-1/2 top-1/2 h-150 w-150 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-primary-container/5 blur-[120px]" />
         </div>
 
         <div className="relative mx-auto max-w-6xl">
@@ -390,7 +384,7 @@ export function LandingPage() {
                 </div>
                 {/* Connector line (desktop) */}
                 {i < STEPS.length - 1 && (
-                  <div className="absolute left-[calc(50%+40px)] top-7 hidden h-px w-[calc(100%-80px)] bg-gradient-to-r from-outline-variant to-transparent sm:block" />
+                  <div className="absolute left-[calc(50%+40px)] top-7 hidden h-px w-[calc(100%-80px)] bg-linear-to-r from-outline-variant to-transparent sm:block" />
                 )}
                 <div className="mt-5 flex size-9 items-center justify-center rounded-lg bg-brand-primary-container/10 text-brand-primary">
                   <step.icon className="size-4.5" strokeWidth={1.8} />
@@ -433,7 +427,7 @@ export function LandingPage() {
       {/* ═══ FINAL CTA ═══ */}
       <section className="px-4 py-20 sm:px-6 sm:py-28">
         <div className="mx-auto max-w-4xl">
-          <div className="landing-reveal relative overflow-hidden rounded-2xl border border-brand-primary/20 bg-gradient-to-br from-brand-primary-container/10 via-surface-container to-brand-tertiary-container/10 p-8 text-center shadow-xl sm:p-14">
+          <div className="landing-reveal relative overflow-hidden rounded-2xl border border-brand-primary/20 bg-linear-to-br from-brand-primary-container/10 via-surface-container to-brand-tertiary-container/10 p-8 text-center shadow-xl sm:p-14">
             {/* Glow effects */}
             <div className="pointer-events-none absolute -left-20 -top-20 h-60 w-60 rounded-full bg-brand-primary-container/15 blur-[80px]" />
             <div className="pointer-events-none absolute -bottom-20 -right-20 h-60 w-60 rounded-full bg-brand-tertiary-container/15 blur-[80px]" />

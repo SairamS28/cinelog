@@ -1,41 +1,39 @@
 "use client";
 
 import type { LibraryMediaType } from "@/lib/types";
-import { useAppDispatch, useAppSelector } from "@/store";
 import {
-  libraryItemKey,
-  libraryItemMutationRequested,
-  type LibraryItemMutation,
-} from "@/store/slices/librarySlice";
+  submitLibraryMutation,
+  useMutateLibraryItemMutation,
+  type LibraryMutationInput,
+} from "@/store/api/library-api";
+import { useAppDispatch } from "@/store";
 
 export function useLibraryItemMutation(
   mediaType: LibraryMediaType,
   tmdbId: number,
 ) {
   const dispatch = useAppDispatch();
-  const pendingSnapshot = useAppSelector(
-    (state) => state.library.pending[libraryItemKey(mediaType, tmdbId)],
-  );
-  const isPending = pendingSnapshot !== undefined;
-  const isStatusPending = pendingSnapshot?.pendingType === "watch_status";
-  const isProgressPending = pendingSnapshot?.pendingType === "progress";
+  const fixedCacheKey = `library-item-${mediaType}-${tmdbId}`;
+  const [, mutation] = useMutateLibraryItemMutation({ fixedCacheKey });
+  const variables = mutation.originalArgs;
+  const isPending = mutation.isLoading;
 
   function requestMutation(
-    payload: Omit<LibraryItemMutation, "mediaType" | "tmdbId">,
+    payload: Omit<LibraryMutationInput, "mediaType" | "tmdbId" | "remove">,
   ) {
-    dispatch(
-      libraryItemMutationRequested({
-        mediaType,
-        tmdbId,
-        ...payload,
-      }),
-    );
+    void submitLibraryMutation(dispatch, { mediaType, tmdbId, ...payload });
+  }
+
+  function requestRemove(payload?: { title?: string }) {
+    void submitLibraryMutation(dispatch, { mediaType, tmdbId, remove: true, ...payload });
   }
 
   return {
     isPending,
-    isStatusPending,
-    isProgressPending,
+    isStatusPending: isPending && variables?.watch_status !== undefined,
+    isProgressPending: isPending && variables?.progress !== undefined,
+    isRemovePending: isPending && variables?.remove === true,
     requestMutation,
+    requestRemove,
   };
 }

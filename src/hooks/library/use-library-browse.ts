@@ -8,7 +8,7 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import {
   libraryCollectionSelected,
   libraryQueryUpdated,
-  libraryRequested,
+  librarySearchQueryUpdated,
 } from "@/store/slices/librarySlice";
 
 export function useLibraryBrowse(mediaType: LibraryMediaType) {
@@ -34,17 +34,23 @@ export function useLibraryBrowse(mediaType: LibraryMediaType) {
         q: next.q.trim(),
       };
 
+      if (options?.skipFetch) {
+        if (normalized.q === query.q.trim()) {
+          return;
+        }
+        dispatch(
+          librarySearchQueryUpdated({ type: mediaType, q: normalized.q }),
+        );
+        return;
+      }
+
       if (browseQueriesEqual(query, normalized)) {
         return;
       }
 
       dispatch(libraryQueryUpdated({ type: mediaType, query: normalized }));
-
-      if (!options?.skipFetch && selectedCollectionId === null) {
-        dispatch(libraryRequested({ type: mediaType }));
-      }
     },
-    [dispatch, mediaType, query, selectedCollectionId],
+    [dispatch, mediaType, query],
   );
 
   useEffect(() => {
@@ -100,10 +106,15 @@ export function useLibraryBrowse(mediaType: LibraryMediaType) {
       }),
     );
     setDialogDraft(DEFAULT_LIBRARY_BROWSE_QUERY);
-    applyQuery(
-      { ...DEFAULT_LIBRARY_BROWSE_QUERY, q: query.q },
-      { skipFetch: collectionId !== null },
-    );
+
+    const nextQuery = { ...DEFAULT_LIBRARY_BROWSE_QUERY, q: query.q };
+
+    if (collectionId === null) {
+      dispatch(libraryQueryUpdated({ type: mediaType, query: nextQuery }));
+      return;
+    }
+
+    applyQuery(nextQuery, { skipFetch: true });
   }
 
   return {

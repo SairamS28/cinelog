@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/http/client";
 import { GENRE_MAX } from "@/lib/constants";
+import { useGenres } from "@/hooks/use-genres";
 import { SelectableChip } from "@/components/onboarding/selectable-chip";
-
-type GenreOption = { tmdb_id: number; name: string };
 
 export function StepGenres({
   selected,
@@ -14,24 +11,7 @@ export function StepGenres({
   selected: number[];
   onToggle: (genreId: number) => void;
 }) {
-  const [genres, setGenres] = useState<GenreOption[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let ignore = false;
-    apiFetch("/api/genres")
-      .then((res) => (res.ok ? res.json() : { genres: [] }))
-      .then((json) => {
-        if (!ignore) setGenres(json.genres ?? []);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!ignore) setIsLoading(false);
-      });
-    return () => {
-      ignore = true;
-    };
-  }, []);
+  const { genres, loading: isLoading } = useGenres();
 
   const atMax = selected.length >= GENRE_MAX;
 

@@ -1,60 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Bookmark, BookmarkCheck, Loader2 } from "lucide-react";
-import { apiFetch } from "@/lib/http/client";
 import { MediaCard } from "@/components/ui/media-card";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
-import { TMDB_POSTER_BASE_URL, TRIGGER_CLASS } from "@/lib/constants";
+import { useTitleStep } from "@/hooks/onboarding/use-title-step";
+import { TRIGGER_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { MediaLean, TitleCandidate } from "@/lib/types";
 
-type SearchResult = {
-  id: number;
-  title: string;
-  poster_path: string | null; // full URL from the search API
-  release_date: string | null; // already a year string
-  vote_average: number | null;
-  is_present_in_watchlist?: boolean;
-};
-
-// mediaType -> add endpoint segment / detail route segment
 const MEDIA_SEGMENT = { 0: "movie", 1: "series" } as const;
-
-function candidateKey(candidate: Pick<TitleCandidate, "tmdbId" | "mediaType">) {
-  return `${candidate.mediaType}-${candidate.tmdbId}`;
-}
-
-// The search API returns fully-qualified poster URLs, but MediaCard rebuilds the
-// URL from a raw TMDB path — so strip the base back off to keep the two sources
-// (search + discover) consistent.
-function toRawPosterPath(fullUrl: string | null): string | null {
-  if (!fullUrl) return null;
-  return fullUrl.startsWith(TMDB_POSTER_BASE_URL)
-    ? fullUrl.slice(TMDB_POSTER_BASE_URL.length)
-    : fullUrl;
-}
-
-async function searchType(
-  query: string,
-  type: "movie" | "series",
-  mediaType: 0 | 1,
-): Promise<TitleCandidate[]> {
-  const res = await apiFetch(
-    `/api/search/${type}?query=${encodeURIComponent(query)}`,
-  );
-  if (!res.ok) return [];
-  const json = (await res.json()) as { results?: SearchResult[] };
-  return (json.results ?? []).map((r) => ({
-    tmdbId: r.id,
-    mediaType,
-    title: r.title,
-    posterPath: toRawPosterPath(r.poster_path),
-    year: r.release_date ?? null,
-    rating: r.vote_average ?? null,
-    inWatchlist: r.is_present_in_watchlist ?? false,
-  }));
-}
+const MEDIA_LABEL = { 0: "Movie", 1: "Series" } as const;
 
 export function StepTitles({
   genreIds,
@@ -70,127 +25,31 @@ export function StepTitles({
   languages?: string[];
   minRating?: number | null;
   eras?: string[];
-  // When the wizard drives the added set (to gate "Finish"), it passes these;
-  // in Settings the step manages its own local set.
   addedKeys?: Set<string>;
   onAdded?: (key: string) => void;
 }) {
-  const [suggestions, setSuggestions] = useState<TitleCandidate[]>([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<TitleCandidate[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [localAdded, setLocalAdded] = useState<Set<string>>(new Set());
-  const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
-  const [errorKey, setErrorKey] = useState<string | null>(null);
-
-  const added = addedKeys ?? localAdded;
-
-  // Stable primitive keys so the effect only re-runs when the values change,
-  // not on every parent re-render that hands us a fresh array reference.
-  const genreKey = genreIds.join(",");
-  const languageKey = (languages ?? []).join(",");
-  const eraKey = (eras ?? []).join(",");
-
-  useEffect(() => {
-    let ignore = false;
-    const params = new URLSearchParams({ mediaType: String(mediaLean) });
-    if (genreKey) params.set("genres", genreKey);
-    if (languageKey) params.set("languages", languageKey);
-    if (eraKey) params.set("eras", eraKey);
-    if (minRating != null) params.set("minRating", String(minRating));
-    apiFetch(`/api/onboarding/title-suggestions?${params.toString()}`)
-      .then((res) => (res.ok ? res.json() : { titles: [] }))
-      .then((json: { titles?: TitleCandidate[] }) => {
-        if (ignore) return;
-        const titles = json.titles ?? [];
-        setSuggestions(titles);
-        // Show titles already on the watchlist as added (check) on load.
-        for (const candidate of titles) {
-          if (candidate.inWatchlist) markAdded(candidateKey(candidate));
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!ignore) setIsLoadingSuggestions(false);
-      });
-    return () => {
-      ignore = true;
-    };
-    // markAdded is stable enough here; re-run only when the filters change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [genreKey, mediaLean, languageKey, eraKey, minRating]);
-
-  function markAdded(key: string) {
-    setLocalAdded((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
-    onAdded?.(key);
-  }
-
-  // Search as the user types, debounced (project standard: 500ms, see
-  // use-search-dialog). Empty query clears results back to suggestions.
-  const trimmedQuery = query.trim();
-  useEffect(() => {
-    let ignore = false;
-    const timeoutId = window.setTimeout(async () => {
-      if (trimmedQuery.length === 0) {
-        if (!ignore) {
-          setResults([]);
-          setIsSearching(false);
-        }
-        return;
-      }
-      if (!ignore) setIsSearching(true);
-      const wantMovies = mediaLean === 0 || mediaLean === 2;
-      const wantSeries = mediaLean === 1 || mediaLean === 2;
-      const [movies, series] = await Promise.all([
-        wantMovies ? searchType(trimmedQuery, "movie", 0) : Promise.resolve([]),
-        wantSeries ? searchType(trimmedQuery, "series", 1) : Promise.resolve([]),
-      ]);
-      if (!ignore) {
-        setResults([...movies, ...series]);
-        // Reflect anything the search says is already on the watchlist.
-        for (const candidate of [...movies, ...series]) {
-          if (candidate.inWatchlist) markAdded(candidateKey(candidate));
-        }
-        setIsSearching(false);
-      }
-    }, 500);
-    return () => {
-      ignore = true;
-      window.clearTimeout(timeoutId);
-    };
-    // markAdded is stable enough for this effect's purpose; keying on the query
-    // and media lean matches the original debounce contract.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trimmedQuery, mediaLean]);
-
-  async function handleAdd(candidate: TitleCandidate) {
-    const key = candidateKey(candidate);
-    if (added.has(key) || pendingKeys.has(key)) return;
-
-    setErrorKey(null);
-    setPendingKeys((prev) => new Set(prev).add(key));
-    try {
-      const res = await apiFetch(
-        `/api/${MEDIA_SEGMENT[candidate.mediaType]}/${candidate.tmdbId}`,
-        { method: "POST" },
-      );
-      // 409 = already in the library, which is the same end state we want.
-      if (res.ok || res.status === 409) {
-        markAdded(key);
-      } else {
-        setErrorKey(key);
-      }
-    } catch {
-      setErrorKey(key);
-    } finally {
-      setPendingKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
-    }
-  }
+  const {
+    query,
+    setQuery,
+    trimmedQuery,
+    suggestions,
+    isLoadingSuggestions,
+    results,
+    isSearching,
+    added,
+    pendingKeys,
+    errorKey,
+    handleAdd,
+    candidateKey,
+  } = useTitleStep({
+    genreIds,
+    mediaLean,
+    languages,
+    minRating,
+    eras,
+    addedKeys,
+    onAdded,
+  });
 
   function renderCardAction(candidate: TitleCandidate) {
     const key = candidateKey(candidate);
@@ -241,15 +100,13 @@ export function StepTitles({
             posterPath={candidate.posterPath}
             year={candidate.year ?? ""}
             rating={candidate.rating != null ? candidate.rating.toFixed(1) : "–"}
-            meta={candidate.title}
+            meta={MEDIA_LABEL[candidate.mediaType]}
             actions={renderCardAction(candidate)}
           />
         ))}
       </div>
     );
   }
-
-
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -262,9 +119,8 @@ export function StepTitles({
         />
       </div>
 
-      <div className="relative flex min-h-[240px] flex-1 flex-col gap-2">
+      <div className="relative flex min-h-60 flex-1 flex-col gap-2">
         {trimmedQuery.length > 0 ? (
-          // Search mode
           isSearching ? (
             <LoadingOverlay
               message="Searching..."
@@ -277,8 +133,7 @@ export function StepTitles({
               No results for “{trimmedQuery}”.
             </p>
           )
-        ) : // Suggestions mode
-        isLoadingSuggestions ? (
+        ) : isLoadingSuggestions ? (
           <LoadingOverlay
             message="Loading suggestions..."
             subMessage="Finding titles you might like"

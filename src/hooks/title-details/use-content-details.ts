@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useAppDispatch, useAppSelector } from "@/store";
-import {
-  detailsRequested,
-  type ContentMediaType,
-} from "@/store/slices/contentDetailsSlice";
+import { apiErrorMessage } from "@/store/api/base-api";
+import type { ContentMediaType } from "@/store/api/content-types";
+import { useGetContentDetailsQuery } from "@/store/api/content-details-api";
 
 type ContentDetailsState<T> = {
   data: T | null;
@@ -18,27 +15,16 @@ export function useContentDetails<T>(
   mediaType: ContentMediaType,
   id: string,
 ): ContentDetailsState<T> {
-  const dispatch = useAppDispatch();
-  const entry = useAppSelector((state) => state.contentDetails[mediaType][id]);
-  const requestedKey = useRef<string | null>(null);
-
-  const retry = () => {
-    dispatch(detailsRequested({ id, mediaType }));
-  };
-
-  useEffect(() => {
-    const requestKey = `${mediaType}:${id}`;
-
-    if (entry || requestedKey.current === requestKey) return;
-
-    requestedKey.current = requestKey;
-    dispatch(detailsRequested({ id, mediaType }));
-  }, [dispatch, entry, id, mediaType]);
+  const result = useGetContentDetailsQuery({ mediaType, id });
 
   return {
-    data: (entry?.data as T | null) ?? null,
-    error: entry?.error ? new Error(entry.error) : null,
-    isLoading: !entry || entry.status === "loading",
-    retry,
+    data: (result.data as T | undefined) ?? null,
+    error: result.isError
+      ? new Error(apiErrorMessage(result.error, "Content details request failed"))
+      : null,
+    isLoading: result.isLoading,
+    retry: () => {
+      void result.refetch();
+    },
   };
 }

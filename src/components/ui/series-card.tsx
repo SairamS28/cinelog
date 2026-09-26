@@ -2,19 +2,36 @@
 
 import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CardRemoveButton } from "@/components/ui/card-remove-button";
+import { CardStatusToggle } from "@/components/ui/card-status-toggle";
 import { MediaCard } from "@/components/ui/media-card";
 import { Progress } from "@/components/ui/progress";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useLibraryItemMutation } from "@/hooks/library/use-library-item-mutation";
 import { useLocales } from "@/hooks/locales/use-locales";
 import { formatMediaMeta, getYearString } from "@/lib/media/display";
-import { calculateSeriesProgress } from "@/lib/media/series-progress";
+import {
+  calculateSeriesProgress,
+  isSeriesWatchable,
+} from "@/lib/media/series-progress";
 import { canUpdateSeriesWatchActivity } from "@/lib/media/status";
 import type { LibrarySeries } from "@/lib/types";
 
+const NON_RELEASED_SERIES_TOOLTIP = "Not yet released";
+
 export function SeriesCard({ series }: { series: LibrarySeries }) {
-  const { isPending, isProgressPending, requestMutation } =
-    useLibraryItemMutation("series", series.tmdb_id);
-  const progress = calculateSeriesProgress(series.seasons_info);
+  const {
+    isPending,
+    isStatusPending,
+    isProgressPending,
+    isRemovePending,
+    requestMutation,
+    requestRemove,
+  } = useLibraryItemMutation("series", series.tmdb_id);
+  const watchStatus = series.watch_status ?? 0;
+  const isWatching = watchStatus === 1;
+  const seasonsInfo = series.seasons_info ?? [];
+  const progress = calculateSeriesProgress(seasonsInfo);
   const nextEpisode = progress.nextEpisode;
   const totalSeasons = series.total_number_of_seasons ?? 0;
   const completedSeasons = series.total_number_of_seasons_watched ?? 0;
@@ -25,7 +42,7 @@ export function SeriesCard({ series }: { series: LibrarySeries }) {
       ? Math.min(100, Math.round((episodesWatched / totalEpisodes) * 100))
       : 0;
 
-  const countableSeasons = (series.seasons_info ?? [])
+  const countableSeasons = seasonsInfo
     .filter((season) => season.season_number > 0 && season.episode_count > 0)
     .sort((a, b) => a.season_number - b.season_number);
 
@@ -48,6 +65,7 @@ export function SeriesCard({ series }: { series: LibrarySeries }) {
   const currentSeasonTotalEpisodes =
     currentSeason?.episode_count ?? totalEpisodes;
   const canUpdateWatchActivity = canUpdateSeriesWatchActivity(series.status);
+  const isWatchable = isSeriesWatchable(series.status, seasonsInfo);
   const { formatLanguage, formatCountry } = useLocales();
   const isNextDisabled =
     isPending || !canUpdateWatchActivity || nextEpisode === null;
@@ -55,51 +73,86 @@ export function SeriesCard({ series }: { series: LibrarySeries }) {
     ? `Mark season ${nextEpisode.seasonNumber}, episode ${nextEpisode.episodeNumber} watched`
     : "All aired episodes watched";
 
+  const removeButton = (
+    <CardRemoveButton
+      disabled={isPending}
+      loading={isRemovePending}
+      onClick={() => requestRemove({ title: series.name })}
+    />
+  );
+
+  const statusToggle = (
+    <CardStatusToggle
+      disabled={
+        isPending ||
+        (watchStatus === 0 ? !isWatchable : !canUpdateWatchActivity)
+      }
+      loading={isStatusPending}
+      onSelect={(nextWatchStatus) =>
+        requestMutation({ watch_status: nextWatchStatus, title: series.name })
+      }
+      watchStatus={watchStatus}
+    />
+  );
+
+  const actions = isWatching ? (
+    <>
+      {removeButton}
+      <Button
+        aria-label={nextEpisodeLabel}
+        className="h-8 flex-1 justify-center gap-1.5 rounded-[6px] px-2.5 text-xs font-semibold"
+        disabled={isNextDisabled}
+        onClick={() => {
+          if (isNextDisabled || !nextEpisode) return;
+          requestMutation({ progress: nextEpisode, title: series.name });
+        }}
+        title={nextEpisodeLabel}
+        type="button"
+        variant="primaryFilled"
+      >
+        {isProgressPending ? (
+          <Loader2 className="size-3.5 animate-spin text-white" />
+        ) : (
+          <Check className="size-3.5" />
+        )}
+        {nextEpisode ? (
+          <span className="truncate">{`Ep ${nextEpisode.episodeNumber}`}</span>
+        ) : null}
+      </Button>
+    </>
+  ) : (
+    <>
+      {removeButton}
+      {watchStatus === 0 && !isWatchable ? (
+        <Tooltip content={NON_RELEASED_SERIES_TOOLTIP}>{statusToggle}</Tooltip>
+      ) : (
+        statusToggle
+      )}
+    </>
+  );
+
   return (
     <MediaCard
-      actions={
-        <>
-          <Button
-            aria-label={nextEpisodeLabel}
-            className="h-8 flex-1 justify-center gap-1.5 rounded-[6px] px-2.5 text-xs font-semibold"
-            disabled={isNextDisabled}
-            onClick={() => {
-              if (isNextDisabled || !nextEpisode) return;
-              requestMutation({ progress: nextEpisode, title: series.name });
-            }}
-            title={nextEpisodeLabel}
-            type="button"
-            variant="primaryFilled"
-          >
-            {isProgressPending ? (
-              <Loader2 className="size-3.5 animate-spin text-white" />
-            ) : (
-              <Check className="size-3.5" />
-            )}
-            <span className="truncate">
-              {nextEpisode ?
-                `Ep ${nextEpisode.episodeNumber}` :
-                !canUpdateWatchActivity ? null : `Completed`}
-            </span>
-          </Button>
-        </>
-      }
-      actionsPosition="below"
+      actions={actions}
+      actionsPosition={isWatching ? "below" : "inline"}
       footerTop={
-        <div className="flex w-full flex-col gap-1.5 pb-0.5">
-          <div className="flex items-center justify-between font-public-sans text-[10px] font-semibold tracking-[0.35px] text-secondary uppercase">
-            <span>
-              {completedSeasons}/{totalSeasons} seasons
-            </span>
-            <span>
-              {currentSeasonEpisodesWatched}/{currentSeasonTotalEpisodes} episodes
-            </span>
+        isWatching ? (
+          <div className="flex w-full flex-col gap-1.5 pb-0.5">
+            <div className="flex items-center justify-between font-public-sans text-[10px] font-semibold tracking-[0.35px] text-secondary uppercase">
+              <span>
+                {completedSeasons}/{totalSeasons} seasons
+              </span>
+              <span>
+                {currentSeasonEpisodesWatched}/{currentSeasonTotalEpisodes}{" "}
+                episodes
+              </span>
+            </div>
+            <Progress
+              className="h-1.5 rounded-[12px] bg-surface-container-high"
+              value={percentage}
+            />
           </div>
-          <Progress
-            className="h-1.5 rounded-[12px] bg-surface-container-high"
-            value={percentage}
-          />
-        </div>
+        ) : undefined
       }
       href={`/series/${series.tmdb_id}`}
       meta={formatMediaMeta(

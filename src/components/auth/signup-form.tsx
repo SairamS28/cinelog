@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { signupSchema, type SignupInput } from "@/lib/validations/auth";
-import { useAppDispatch, useAppSelector } from "@/store";
-import { signupRequest } from "@/store/slices/authSlice";
+import { apiErrorMessage } from "@/store/api/base-api";
+import { useSignupMutation } from "@/store/api/auth-api";
+import { useAppSelector } from "@/store";
 import { Eye, EyeOff, Loader2, Lock, Mail, Sparkles, User } from "lucide-react";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { Button } from "@/components/ui/button";
@@ -39,14 +40,11 @@ function ErrorList({ error }: { error?: FieldError }) {
 
 export function SignupForm() {
   const [showPassword, setShowPassword] = useState(false);
-  const dispatch = useAppDispatch();
-  const { status, error, isAuthenticated, user } = useAppSelector((state) => state.auth);
-
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      window.location.replace(user.hasCompletedOnboarding ? "/" : "/onboarding");
-    }
-  }, [isAuthenticated, user]);
+  const [signup, signupState] = useSignupMutation();
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const error = signupState.error
+    ? apiErrorMessage(signupState.error, "Signup failed")
+    : null;
 
   const {
     register,
@@ -58,7 +56,7 @@ export function SignupForm() {
   });
 
   const onSubmit = (data: SignupInput) => {
-    dispatch(signupRequest(data));
+    void signup(data);
   };
 
   if (isAuthenticated) {
@@ -177,10 +175,10 @@ export function SignupForm() {
 
         <Button
           className="mt-1 sm:mt-2 h-9.5 sm:h-10.5 w-full text-xs sm:text-sm font-medium shadow-sm transition-all"
-          disabled={status === "loading"}
+          disabled={signupState.isLoading}
           type="submit"
         >
-          {status === "loading" ? (
+          {signupState.isLoading ? (
             <>
               <Loader2 className="size-3.5 sm:size-4 animate-spin" />
               <span>Create account</span>

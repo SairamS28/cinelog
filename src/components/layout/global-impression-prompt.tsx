@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { ReactionButton } from "@/components/content-detail/hero-header/reaction-button";
 import {
   Dialog,
@@ -10,24 +9,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { IMPRESSION, IMPRESSION_CONFIG } from "@/lib/constants";
+import { submitContentMutation } from "@/store/api/content-details-api";
+import { submitLibraryMutation } from "@/store/api/library-api";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { mutationRequested } from "@/store/slices/contentDetailsSlice";
 import { impressionPromptSubmitting } from "@/store/slices/impressionPromptSlice";
-import { libraryItemMutationRequested } from "@/store/slices/librarySlice";
 
 export function GlobalImpressionPrompt() {
   const dispatch = useAppDispatch();
-  const { target, status, error } = useAppSelector(
+  const { target, status, error, pendingValue } = useAppSelector(
     (state) => state.impressionPrompt,
   );
-  const [pending, setPending] = useState<{ key: string; value: number } | null>(
-    null,
-  );
   const isSubmitting = status === "submitting";
-  const targetKey = target
-    ? `${target.mediaType}-${target.tmdbId}-${target.reason}-${target.seasonNumber ?? ""}`
-    : null;
-  const pendingValue = pending?.key === targetKey ? pending.value : null;
 
   if (!target) {
     return null;
@@ -43,29 +35,24 @@ export function GlobalImpressionPrompt() {
       return;
     }
 
-    setPending(targetKey ? { key: targetKey, value } : null);
-    dispatch(impressionPromptSubmitting());
+    dispatch(impressionPromptSubmitting(value));
 
     if (target.source === "library") {
-      dispatch(
-        libraryItemMutationRequested({
-          mediaType: target.mediaType,
-          tmdbId: target.tmdbId,
-          title: target.title,
-          impression: value,
-        }),
-      );
+      void submitLibraryMutation(dispatch, {
+        mediaType: target.mediaType,
+        tmdbId: target.tmdbId,
+        title: target.title,
+        impression: value,
+      });
       return;
     }
 
-    dispatch(
-      mutationRequested({
-        id: String(target.tmdbId),
-        mediaType: target.mediaType,
-        mutation: "update-impression",
-        value,
-      }),
-    );
+    void submitContentMutation(dispatch, {
+      id: String(target.tmdbId),
+      mediaType: target.mediaType,
+      mutation: "update-impression",
+      value,
+    });
   }
 
   return (

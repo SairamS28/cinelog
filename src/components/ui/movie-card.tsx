@@ -1,5 +1,6 @@
 "use client";
 
+import { CardRemoveButton } from "@/components/ui/card-remove-button";
 import { CardStatusToggle } from "@/components/ui/card-status-toggle";
 import { MediaCard } from "@/components/ui/media-card";
 import { useLibraryItemMutation } from "@/hooks/library/use-library-item-mutation";
@@ -9,24 +10,29 @@ import { canUpdateMovieWatchActivity } from "@/lib/media/status";
 import type { LibraryMovie } from "@/lib/types";
 
 export function MovieCard({ movie }: { movie: LibraryMovie }) {
-  const { isPending, isStatusPending, requestMutation } = useLibraryItemMutation(
-    "movie",
-    movie.tmdb_id,
-  );
+  const { isPending, isStatusPending, isRemovePending, requestMutation, requestRemove } =
+    useLibraryItemMutation("movie", movie.tmdb_id);
   const canUpdateWatchActivity = canUpdateMovieWatchActivity(movie.status);
   const { formatLanguage, formatCountry } = useLocales();
 
   return (
     <MediaCard
       actions={
-        <CardStatusToggle
-          disabled={isPending || !canUpdateWatchActivity}
-          loading={isStatusPending}
-          onSelect={(watchStatus) =>
-            requestMutation({ watch_status: watchStatus, title: movie.title })
-          }
-          watchStatus={movie.watch_status}
-        />
+        <>
+          <CardRemoveButton
+            disabled={isPending}
+            loading={isRemovePending}
+            onClick={() => requestRemove({ title: movie.title })}
+          />
+          <CardStatusToggle
+            disabled={isPending || !canUpdateWatchActivity}
+            loading={isStatusPending}
+            onSelect={(watchStatus) =>
+              requestMutation({ watch_status: watchStatus, title: movie.title })
+            }
+            watchStatus={movie.watch_status}
+          />
+        </>
       }
       href={`/movie/${movie.tmdb_id}`}
       meta={formatMediaMeta(

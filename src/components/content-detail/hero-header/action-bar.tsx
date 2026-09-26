@@ -10,9 +10,9 @@ import { IMPRESSION, IMPRESSION_CONFIG } from "@/lib/constants";
 import type { MovieDetails, SeriesDetails } from "@/lib/types";
 import { orFallback } from "@/lib/utils";
 import type {
-  ContentMutationStatus,
   ContentMutation,
-} from "@/store/slices/contentDetailsSlice";
+  ContentMutationStatus,
+} from "@/store/api/content-types";
 
 type ActionBarProps = {
   id?: number;

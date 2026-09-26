@@ -1,21 +1,18 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Layers, Loader2 } from "lucide-react";
 import { Carousel } from "@/components/ui/carousel";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MovieCard } from "@/components/ui/movie-card";
 import { SeriesCard } from "@/components/ui/series-card";
-import { usePatchCollectionItemsOnMutationSuccess } from "@/hooks/library/use-patch-collection-items-on-mutation-success";
-import { apiFetch } from "@/lib/http/client";
+import { appendUnique } from "@/lib/media/library-items";
+import { useGetCollectionCarouselPagesInfiniteQuery } from "@/store/api/library-api";
 import type {
-  LibraryMediaType,
   LibraryMovie,
   LibrarySeries,
   SmartCollectionWithFilters,
 } from "@/lib/types";
-
-const MINIMUM_COLLECTION_PAGE_SIZE = 15;
 
 type CollectionCarouselProps = {
   collection: SmartCollectionWithFilters;
@@ -30,69 +27,32 @@ export function CollectionCarousel({
   initialItems,
   initialCount,
   initialHasMore,
-  pageSize = MINIMUM_COLLECTION_PAGE_SIZE,
 }: CollectionCarouselProps) {
-  const actualPageSize = Math.max(MINIMUM_COLLECTION_PAGE_SIZE, pageSize);
-  const [items, setItems] = useState(initialItems);
-  const [count, setCount] = useState(initialCount);
-  const [hasMore, setHasMore] = useState(initialHasMore);
-  const [loadingMore, setLoadingMore] = useState(false);
-
-  const mediaType: LibraryMediaType =
-    collection.mediaType === 0 ? "movie" : "series";
-
-  usePatchCollectionItemsOnMutationSuccess({
-    mediaType,
-    setItems,
+  const isMovie = collection.mediaType === 0;
+  const [paging, setPaging] = useState(false);
+  const query = useGetCollectionCarouselPagesInfiniteQuery(collection.id, {
+    skip: !paging,
+    initialPageParam: initialItems.length,
   });
 
-  const handleNearEnd = useCallback(async () => {
-    if (!hasMore || loadingMore) return;
-
-    setLoadingMore(true);
-    try {
-      const params = new URLSearchParams({
-        offset: String(items.length),
-        limit: String(actualPageSize),
-      });
-      const res = await apiFetch(
-        `/api/collections/${collection.id}/items?${params.toString()}`,
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to load more items");
-      }
-
-      const payload = data.data ?? data;
-      const pageItems =
-        collection.mediaType === 0 ? payload.movies : payload.series;
-      setItems((prev) => [...prev, ...pageItems]);
-      setCount(
-        collection.mediaType === 0
-          ? payload.metadata.count.movies
-          : payload.metadata.count.series,
-      );
-      setHasMore(payload.metadata.hasMore);
-    } catch {
-      // keep current items visible on load-more failure
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [
-    actualPageSize,
-    collection.id,
-    collection.mediaType,
-    hasMore,
-    items.length,
-    loadingMore,
-  ]);
+  const fetched = (query.data?.pages ?? []).reduce<Array<LibraryMovie | LibrarySeries>>(
+    (all, page) => appendUnique(all, isMovie ? page.movies : page.series),
+    [],
+  );
+  const items = appendUnique(initialItems, fetched);
+  const count = isMovie
+    ? (query.data?.pages[0]?.metadata.count.movies ?? initialCount)
+    : (query.data?.pages[0]?.metadata.count.series ?? initialCount);
+  const hasMore = query.data
+    ? Boolean(query.hasNextPage)
+    : initialHasMore;
 
   return (
     <Carousel
       extraHeader={
         <>
           <span className="rounded-md border border-outline-variant bg-surface-container-high px-2 py-0.5 font-public-sans text-[10px] font-medium text-secondary">
-            {collection.mediaType === 0 ? "Movies" : "Series"}
+            {isMovie ? "Movies" : "Series"}
           </span>
           <span className="font-public-sans text-xs text-outline-muted">
             {count} {count === 1 ? "title" : "titles"}
@@ -105,20 +65,27 @@ export function CollectionCarousel({
       headingId={`collection-${collection.id}-heading`}
       icon={<Layers className="h-4.5 w-4.5" />}
       navAlwaysVisible
-      onNearEnd={() => void handleNearEnd()}
+      onNearEnd={() => {
+        if (!hasMore || query.isFetching) return;
+        if (!paging) {
+          setPaging(true);
+          return;
+        }
+        void query.fetchNextPage();
+      }}
       showNav={count > 0}
       title={collection.name}
     >
       {count > 0 ? (
         <>
           {items.map((item) => {
-            const isMovie = "title" in item;
+            const itemIsMovie = "title" in item;
             return (
               <div
                 className="w-40 shrink-0 sm:w-60"
-                key={`${isMovie ? "movie" : "series"}-${item.tmdb_id}`}
+                key={`${itemIsMovie ? "movie" : "series"}-${item.tmdb_id}`}
               >
-                {isMovie ? (
+                {itemIsMovie ? (
                   <MovieCard movie={item as LibraryMovie} />
                 ) : (
                   <SeriesCard series={item as LibrarySeries} />
@@ -126,7 +93,7 @@ export function CollectionCarousel({
               </div>
             );
           })}
-          {loadingMore ? (
+          {query.isFetching ? (
             <div className="flex w-16 shrink-0 items-center justify-center py-8 text-brand-primary">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
