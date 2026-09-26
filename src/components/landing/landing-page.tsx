@@ -193,13 +193,7 @@ export function LandingPage() {
   const scrollRef = useScrollReveal();
   const { theme, mounted } = useTheme();
   const isDark = mounted ? theme === "dark" : true;
-  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
-
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      window.location.replace(user.hasCompletedOnboarding ? "/" : "/onboarding");
-    }
-  }, [isAuthenticated, user]);
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
 
   if (isAuthenticated) {
     return (

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
-import { useAppDispatch, useAppSelector } from "@/store";
-import { loginRequest } from "@/store/slices/authSlice";
+import { apiErrorMessage } from "@/store/api/base-api";
+import { useLoginMutation } from "@/store/api/auth-api";
+import { useAppSelector } from "@/store";
 import { Eye, EyeOff, Loader2, Lock, User } from "lucide-react";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { Button } from "@/components/ui/button";
@@ -15,14 +16,11 @@ import { Input } from "@/components/ui/input";
 
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
-  const dispatch = useAppDispatch();
-  const { status, error, isAuthenticated, user } = useAppSelector((state) => state.auth);
-
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      window.location.replace(user.hasCompletedOnboarding ? "/" : "/onboarding");
-    }
-  }, [isAuthenticated, user]);
+  const [login, loginState] = useLoginMutation();
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const error = loginState.error
+    ? apiErrorMessage(loginState.error, "Login failed")
+    : null;
 
   const {
     register,
@@ -33,7 +31,7 @@ export function LoginForm() {
   });
 
   const onSubmit = (data: LoginInput) => {
-    dispatch(loginRequest(data));
+    void login(data);
   };
 
   if (isAuthenticated) {
@@ -112,10 +110,10 @@ export function LoginForm() {
 
         <Button
           className="mt-1 sm:mt-2 h-9.5 sm:h-10.5 w-full text-xs sm:text-sm font-medium shadow-sm transition-all"
-          disabled={status === "loading"}
+          disabled={loginState.isLoading}
           type="submit"
         >
-          {status === "loading" ? (
+          {loginState.isLoading ? (
             <>
               <Loader2 className="size-3.5 sm:size-4 animate-spin" />
               <span>Log in</span>

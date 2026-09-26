@@ -4,10 +4,10 @@ import { Check, CheckCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useContentMutation } from "@/hooks/title-details/use-content-mutation";
 import type {
-  ContentMutationStatus,
   ContentMutation,
+  ContentMutationStatus,
   ContentProgressMutation,
-} from "@/store/slices/contentDetailsSlice";
+} from "@/store/api/content-types";
 
 type ProgressActionsProps = {
   disabled?: boolean;

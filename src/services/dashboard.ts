@@ -24,23 +24,7 @@ export type DashboardData = {
 };
 
 export async function getDashboardData(userId: number): Promise<DashboardData> {
-  const [movieCountResult, seriesCountResult, allCollections] = await Promise.all([
-    getLibrary(userId, {
-      type: "movie",
-      offset: 0,
-      limit: 1,
-      sort_field: "created_at",
-      sort_direction: 1,
-    }),
-    getLibrary(userId, {
-      type: "series",
-      offset: 0,
-      limit: 1,
-      sort_field: "created_at",
-      sort_direction: 1,
-    }),
-    getUserCollections(userId),
-  ]);
+  const allCollections = await getUserCollections(userId);
 
   const dashboardCollections = allCollections
     .filter((col) => col.showInDashboard && col.groupBy === null)
@@ -63,11 +47,19 @@ export async function getDashboardData(userId: number): Promise<DashboardData> {
     }),
   );
 
+  const counts = previews[0]?.preview.metadata.count ??
+    (
+      await getLibrary(userId, {
+        type: "movie",
+        offset: 0,
+        limit: 1,
+        sort_field: "created_at",
+        sort_direction: 1,
+      })
+    ).metadata.count;
+
   return {
-    counts: {
-      movies: movieCountResult.metadata.count.movies,
-      series: seriesCountResult.metadata.count.series,
-    },
+    counts,
     collections: previews,
   };
 }

@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useMemo } from "react";
+import { useAnchoredMenu } from "@/hooks/use-anchored-menu";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,11 +47,16 @@ export function SearchFilterSelect({
   wrapperClassName,
   value,
 }: SearchFilterSelectProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [filter, setFilter] = useState("");
-  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
-  const triggerRef = useRef<HTMLSpanElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const {
+    isOpen,
+    filter,
+    setFilter,
+    menuStyle,
+    triggerRef,
+    menuRef,
+    closeMenu,
+    toggleMenu,
+  } = useAnchoredMenu(menuMinWidth ?? (searchable ? 176 : undefined));
 
   const selected = options.find((option) => option.value === value);
   const filteredOptions = useMemo(() => {
@@ -73,61 +71,6 @@ export function SearchFilterSelect({
         option.value.toLowerCase().includes(normalized),
     );
   }, [filter, options]);
-
-  const closeMenu = useCallback(() => {
-    setIsOpen(false);
-    setFilter("");
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!isOpen || !triggerRef.current) {
-      return;
-    }
-
-    const rect = triggerRef.current.getBoundingClientRect();
-    setMenuStyle({
-      position: "fixed",
-      top: rect.bottom + 8,
-      left: rect.left,
-      width: Math.max(
-        rect.width,
-        menuMinWidth ?? (searchable ? 176 : rect.width),
-      ),
-      zIndex: 80,
-    });
-  }, [isOpen, menuMinWidth, searchable]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (
-        triggerRef.current?.contains(target) ||
-        menuRef.current?.contains(target)
-      ) {
-        return;
-      }
-      closeMenu();
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        closeMenu();
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [closeMenu, isOpen]);
 
   return (
     <>
@@ -144,11 +87,7 @@ export function SearchFilterSelect({
           disabled={disabled}
           onClick={() => {
             if (disabled) return;
-            if (isOpen) {
-              closeMenu();
-              return;
-            }
-            setIsOpen(true);
+            toggleMenu();
           }}
           type="button"
           variant={isOpen || value ? "primaryFilled" : "darkFilled"}

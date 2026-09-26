@@ -1,6 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { WATCH_STATUS } from "@/lib/constants";
-import type { ContentMediaType } from "./contentDetailsSlice";
+import type { ContentMediaType } from "@/store/api/content-types";
 
 export type ImpressionPromptReason =
   | "movie-completed"
@@ -24,6 +24,7 @@ export type ImpressionPromptState = {
   target: ImpressionPromptTarget | null;
   status: ImpressionPromptStatus;
   error: string | null;
+  pendingValue: number | null;
 };
 
 type SeasonProgress = {
@@ -48,6 +49,7 @@ const initialState: ImpressionPromptState = {
   target: null,
   status: "idle",
   error: null,
+  pendingValue: null,
 };
 
 function sameTitle(
@@ -124,14 +126,16 @@ const impressionPromptSlice = createSlice({
       state.target = action.payload;
       state.status = "idle";
       state.error = null;
+      state.pendingValue = null;
     },
-    impressionPromptSubmitting: (state) => {
+    impressionPromptSubmitting: (state, action: PayloadAction<number>) => {
       if (!state.target) {
         return;
       }
 
       state.status = "submitting";
       state.error = null;
+      state.pendingValue = action.payload;
     },
     impressionPromptResolved: (
       state,
@@ -144,6 +148,7 @@ const impressionPromptSlice = createSlice({
       state.target = null;
       state.status = "idle";
       state.error = null;
+      state.pendingValue = null;
     },
     impressionPromptFailed: (
       state,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AlertCircle, Clapperboard, TvMinimal } from "lucide-react";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { MovieCard } from "@/components/ui/movie-card";
@@ -10,7 +10,8 @@ import { LibraryFilterControls } from "@/components/library/library-filter-contr
 import { LibraryGroupCarousel } from "@/components/library/library-group-carousel";
 import { LibrarySection } from "@/components/library/library-section";
 import { useLibraryBrowseSession } from "@/hooks/library/use-library-browse-session";
-import { useLibraryCollectionPreset } from "@/hooks/library/use-library-collection-preset";
+import { useLibraryCollection } from "@/hooks/library/use-library-collection";
+import { useLibraryList } from "@/hooks/library/use-library-list";
 import {
   LIBRARY_DESCRIPTION,
   LIBRARY_EMPTY_DESCRIPTION,
@@ -21,14 +22,11 @@ import {
 import type {
   LibraryGroupBy,
   LibraryMediaType,
-  SmartCollectionWithFilters,
+  LibraryMovie,
+  LibrarySeries,
 } from "@/lib/types";
-import { useAppDispatch, useAppSelector } from "@/store";
-import {
-  libraryGroupPageRequested,
-  libraryPageRequested,
-  libraryRequested,
-} from "@/store/slices/librarySlice";
+import { useGetCollectionsQuery } from "@/store/api/collections-api";
+import { useAppSelector } from "@/store";
 
 type LibraryViewProps = {
   mediaType?: LibraryMediaType;
@@ -36,32 +34,17 @@ type LibraryViewProps = {
 
 export function LibraryView({ mediaType = "movie" }: LibraryViewProps) {
   useLibraryBrowseSession();
-  const dispatch = useAppDispatch();
-  const {
-    movies,
-    series,
-    movieCount,
-    seriesCount,
-    moviesHasMore,
-    seriesHasMore,
-    moviesLoaded,
-    seriesLoaded,
-    moviesLoadingMore,
-    seriesLoadingMore,
-    movieGroups,
-    seriesGroups,
-    movieGroupPages,
-    seriesGroupPages,
-    queries,
-    selectedCollectionIds,
-    status,
-  } = useAppSelector((state) => state.library);
+  const { queries, selectedCollectionIds } = useAppSelector(
+    (state) => state.library,
+  );
 
   const query = queries[mediaType];
   const selectedCollectionId = selectedCollectionIds[mediaType];
 
-  const [collections, setCollections] = useState<SmartCollectionWithFilters[]>(
-    [],
+  const collectionsQuery = useGetCollectionsQuery();
+  const collections = useMemo(
+    () => collectionsQuery.data?.collections ?? [],
+    [collectionsQuery.data],
   );
 
   const validSelectedCollectionId = useMemo(() => {
@@ -77,7 +60,12 @@ export function LibraryView({ mediaType = "movie" }: LibraryViewProps) {
     return selectedCollectionId;
   }, [collections, mediaType, selectedCollectionId]);
 
-  const preset = useLibraryCollectionPreset(validSelectedCollectionId, query.q);
+  const manual = useLibraryList(
+    mediaType,
+    query,
+    validSelectedCollectionId === null,
+  );
+  const preset = useLibraryCollection(validSelectedCollectionId, query.q);
 
   const libraryCollections = useMemo(
     () =>
@@ -89,60 +77,35 @@ export function LibraryView({ mediaType = "movie" }: LibraryViewProps) {
     [collections, mediaType],
   );
 
-  useEffect(() => {
-    let ignore = false;
-    async function loadCols() {
-      try {
-        const res = await fetch("/api/collections");
-        if (res.ok) {
-          const data = await res.json();
-          if (!ignore) {
-            setCollections(data.collections ?? data.data?.collections ?? []);
-          }
-        }
-      } catch {
-        // silent ignore
-      }
-    }
-    void loadCols();
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    dispatch(libraryRequested({ type: mediaType, refresh: true }));
-  }, [dispatch, mediaType]);
-
   const isMovies = mediaType === "movie";
-  const isLoaded = isMovies ? moviesLoaded : seriesLoaded;
+  const manualData = manual.data;
+  const presetData = preset.data;
+  const active = validSelectedCollectionId !== null ? presetData : manualData;
   const isLoading =
-    validSelectedCollectionId !== null
-      ? preset.isLoading
-      : !isLoaded && status !== "failed";
-  const currentCount = isMovies ? movieCount : seriesCount;
-  const hasMore = isMovies ? moviesHasMore : seriesHasMore;
-  const loadingMore = isMovies ? moviesLoadingMore : seriesLoadingMore;
+    validSelectedCollectionId !== null ? preset.isLoading : manual.isLoading;
+  const currentCount = active
+    ? isMovies
+      ? active.movieCount
+      : active.seriesCount
+    : 0;
   const emptyIcon = isMovies ? (
     <Clapperboard className="h-6 w-6" />
   ) : (
     <TvMinimal className="h-6 w-6" />
   );
-  const groups = isMovies ? movieGroups : seriesGroups;
-  const groupPages = isMovies ? movieGroupPages : seriesGroupPages;
   const isManualGrouped =
     validSelectedCollectionId === null &&
-    isLoaded &&
+    Boolean(manualData) &&
     query.groupBy !== undefined &&
-    Boolean(groups?.length);
+    Boolean(manualData?.groups?.length);
   const tabMovieCount =
-    validSelectedCollectionId !== null && preset.collection?.mediaType === 0
-      ? preset.count
-      : movieCount;
+    validSelectedCollectionId !== null && presetData?.collection?.mediaType === 0
+      ? presetData.movieCount
+      : (active?.movieCount ?? 0);
   const tabSeriesCount =
-    validSelectedCollectionId !== null && preset.collection?.mediaType === 1
-      ? preset.count
-      : seriesCount;
+    validSelectedCollectionId !== null && presetData?.collection?.mediaType === 1
+      ? presetData.seriesCount
+      : (active?.seriesCount ?? 0);
 
   return (
     <main className="relative min-h-[calc(100vh-3.5rem)] px-3.5 py-6 sm:px-6 lg:py-8">
@@ -177,21 +140,21 @@ export function LibraryView({ mediaType = "movie" }: LibraryViewProps) {
             title="Collection unavailable"
             titleClassName="text-status-error"
           />
-        ) : status === "failed" && !isLoaded && validSelectedCollectionId === null ? (
+        ) : manual.isError && !manualData && validSelectedCollectionId === null ? (
           <EmptyState
             description={LIBRARY_ERROR_DESCRIPTION}
             icon={<AlertCircle className="h-6 w-6 text-status-error" />}
             title={LIBRARY_ERROR_TITLE}
             titleClassName="text-status-error"
           />
-        ) : isLoading ? null : validSelectedCollectionId && preset.collection ? (
-          preset.isGrouped && preset.groups?.length ? (
-            preset.groups.map((group) => {
-              const page = preset.groupPages[group.key];
+        ) : isLoading ? null : validSelectedCollectionId && presetData?.collection ? (
+          presetData.groupBy !== null && presetData.groups?.length ? (
+            presetData.groups.map((group) => {
+              const page = presetData.groupPages[group.key];
               return (
                 <LibraryGroupCarousel
                   group={group}
-                  groupBy={preset.collection!.groupBy as LibraryGroupBy}
+                  groupBy={presetData.groupBy as LibraryGroupBy}
                   hasMore={page?.hasMore ?? Boolean(group.hasMore)}
                   items={page?.items ?? []}
                   key={group.key}
@@ -201,7 +164,7 @@ export function LibraryView({ mediaType = "movie" }: LibraryViewProps) {
                 />
               );
             })
-          ) : preset.count === 0 ? (
+          ) : currentCount === 0 ? (
             <EmptyState
               description={LIBRARY_EMPTY_DESCRIPTION}
               icon={emptyIcon}
@@ -209,37 +172,37 @@ export function LibraryView({ mediaType = "movie" }: LibraryViewProps) {
             />
           ) : (
             <LibrarySection
-              count={preset.count}
+              count={currentCount}
               emptyIcon={emptyIcon}
-              hasMore={preset.metadata?.hasMore ?? false}
+              hasMore={presetData.hasMore}
               loadingMore={preset.loadingMore}
-              onLoadMore={() => void preset.loadMoreGallery()}
-              title={preset.collection.name}
+              onLoadMore={() => void preset.loadMore()}
+              title={presetData.collection.name}
             >
               {isMovies
-                ? preset.items.map((movie) => (
+                ? presetData.items.map((movie) => (
                     <MovieCard
                       key={movie.tmdb_id}
-                      movie={movie as typeof movies[number]}
+                      movie={movie as LibraryMovie}
                     />
                   ))
-                : preset.items.map((show) => (
+                : presetData.items.map((show) => (
                     <SeriesCard
                       key={show.tmdb_id}
-                      series={show as typeof series[number]}
+                      series={show as LibrarySeries}
                     />
                   ))}
             </LibrarySection>
           )
-        ) : !isLoaded ? null : currentCount === 0 ? (
+        ) : !manualData ? null : currentCount === 0 ? (
           <EmptyState
             description={LIBRARY_EMPTY_DESCRIPTION}
             icon={emptyIcon}
             title={LIBRARY_EMPTY_TITLE}
           />
-        ) : isManualGrouped && groups ? (
-          groups.map((group) => {
-            const page = groupPages[group.key];
+        ) : isManualGrouped && manualData.groups ? (
+          manualData.groups.map((group) => {
+            const page = manualData.groupPages[group.key];
             return (
               <LibraryGroupCarousel
                 group={group}
@@ -249,14 +212,7 @@ export function LibraryView({ mediaType = "movie" }: LibraryViewProps) {
                 key={group.key}
                 loadingMore={page?.loadingMore ?? false}
                 mediaType={mediaType}
-                onLoadMore={() =>
-                  dispatch(
-                    libraryGroupPageRequested({
-                      type: mediaType,
-                      groupKey: group.key,
-                    }),
-                  )
-                }
+                onLoadMore={() => void manual.loadMoreGroup(group.key)}
               />
             );
           })
@@ -264,19 +220,17 @@ export function LibraryView({ mediaType = "movie" }: LibraryViewProps) {
           <LibrarySection
             count={currentCount}
             emptyIcon={emptyIcon}
-            hasMore={hasMore}
-            loadingMore={loadingMore}
-            onLoadMore={() =>
-              dispatch(libraryPageRequested({ type: mediaType }))
-            }
+            hasMore={manualData.hasMore}
+            loadingMore={manual.loadingMore}
+            onLoadMore={() => void manual.loadMore()}
             title={isMovies ? "Movies" : "Series"}
           >
             {isMovies
-              ? movies.map((movie) => (
-                  <MovieCard key={movie.tmdb_id} movie={movie} />
+              ? manualData.items.map((movie) => (
+                  <MovieCard key={movie.tmdb_id} movie={movie as LibraryMovie} />
                 ))
-              : series.map((show) => (
-                  <SeriesCard key={show.tmdb_id} series={show} />
+              : manualData.items.map((show) => (
+                  <SeriesCard key={show.tmdb_id} series={show as LibrarySeries} />
                 ))}
           </LibrarySection>
         )}

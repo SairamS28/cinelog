@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { hasAiredOnOrBeforeToday } from "@/lib/media/air-date";
 import type { SeriesDetails } from "@/lib/types";
@@ -13,6 +13,7 @@ export type SeasonOption = {
 };
 
 export function useProgressSeasons(series?: SeriesDetails | null) {
+  const [pickedSeason, setPickedSeason] = useState<number | null>(null);
   const seasons = useMemo<SeasonOption[]>(
     () =>
       (series?.seasons ?? []).map((season, index) => {
@@ -37,5 +38,16 @@ export function useProgressSeasons(series?: SeriesDetails | null) {
     seasons[0]?.seasonNumber ??
     1;
 
-  return { defaultSeasonNumber, seasons };
+  const selectedSeason =
+    pickedSeason !== null &&
+    seasons.some((season) => season.seasonNumber === pickedSeason)
+      ? pickedSeason
+      : defaultSeasonNumber;
+
+  return {
+    defaultSeasonNumber,
+    seasons,
+    selectedSeason,
+    setSelectedSeason: setPickedSeason,
+  };
 }

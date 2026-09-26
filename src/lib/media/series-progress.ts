@@ -1,4 +1,5 @@
 import { hasAiredOnOrBeforeToday, todayIsoDate } from "@/lib/media/air-date";
+import { canUpdateSeriesWatchActivity } from "@/lib/media/status";
 import type { LibrarySeriesSeason } from "@/lib/types";
 
 type NextEpisode = {
@@ -61,4 +62,25 @@ export function calculateSeriesProgress(
         : 0,
     nextEpisode,
   };
+}
+
+export function hasAiredSeriesEpisodes(
+  seasons: LibrarySeriesSeason[],
+  today = todayIsoDate(),
+): boolean {
+  return seasons.some(
+    (season) =>
+      season.season_number > 0 &&
+      season.episode_count > 0 &&
+      hasAiredOnOrBeforeToday(season.air_date, today),
+  );
+}
+
+export function isSeriesWatchable(
+  status: string | null | undefined,
+  seasons: LibrarySeriesSeason[],
+): boolean {
+  return (
+    canUpdateSeriesWatchActivity(status) && hasAiredSeriesEpisodes(seasons)
+  );
 }

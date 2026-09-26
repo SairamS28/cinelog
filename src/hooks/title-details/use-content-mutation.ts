@@ -1,19 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { useAppDispatch } from "@/store";
 import {
   canUpdateMovieWatchActivity,
   canUpdateSeriesWatchActivity,
 } from "@/lib/media/status";
 import type { MovieDetails, SeriesDetails } from "@/lib/types";
-import {
-  mutationRequested,
-  type ContentMediaType,
-  type ContentMutation,
-  type ContentMutationStatus,
-  type ContentProgressMutation,
-} from "@/store/slices/contentDetailsSlice";
+import type {
+  ContentMediaType,
+  ContentMutation,
+  ContentMutationStatus,
+  ContentProgressMutation,
+} from "@/store/api/content-types";
+import { submitContentMutation } from "@/store/api/content-details-api";
+import { useAppDispatch } from "@/store";
 
 type UseContentMutationOptions = {
   id?: number;
@@ -68,20 +68,16 @@ export function useContentMutation({
       if (requireWatchActivity && !canUpdateWatchActivity) return;
 
       isPendingRef.current = true;
-      dispatch(
-        mutationRequested({
-          id: String(id),
-          mediaType,
-          mutation,
-          value: options?.value,
-          content,
-          progress: options?.progress,
-        }),
-      );
+      void submitContentMutation(dispatch, {
+        id: String(id),
+        mediaType,
+        mutation,
+        value: options?.value,
+        progress: options?.progress,
+      });
     },
     [
       canUpdateWatchActivity,
-      content,
       dispatch,
       id,
       isMutating,

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiFetch } from "@/lib/http/client";
 import { GENRE_MAX, LANGUAGE_MAX } from "@/lib/constants";
 import type { MediaLean, UserPreferencesInput } from "@/lib/types";
+import { apiErrorMessage } from "@/store/api/base-api";
+import { useUpdatePreferencesMutation } from "@/store/api/user-api";
 
 const STEP_COUNT = 5; // media-lean, genres, languages, era-rating, titles
 
@@ -34,7 +35,8 @@ export function useOnboardingWizard() {
   const [stepIndex, setStepIndex] = useState(0);
   const [mediaLeanChosen, setMediaLeanChosen] = useState(false);
   const [draft, setDraft] = useState<UserPreferencesInput>(emptyDraft);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [updatePreferences, { isLoading: isSubmitting }] =
+    useUpdatePreferencesMutation();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   // Titles the user has added to their watchlist this session (keyed
@@ -147,18 +149,9 @@ export function useOnboardingWizard() {
   const back = useCallback(() => setStepIndex((i) => Math.max(i - 1, 0)), []);
 
   const submit = useCallback(async () => {
-    setIsSubmitting(true);
     setErrorMessage(null);
     try {
-      const res = await apiFetch("/api/user/preferences", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json.error || "Failed to save preferences");
-      }
+      await updatePreferences(draft).unwrap();
       try {
         window.localStorage.removeItem(DRAFT_STORAGE_KEY);
       } catch {
@@ -166,12 +159,9 @@ export function useOnboardingWizard() {
       }
       window.location.replace("/");
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to save preferences",
-      );
-      setIsSubmitting(false);
+      setErrorMessage(apiErrorMessage(error, "Failed to save preferences"));
     }
-  }, [draft]);
+  }, [draft, updatePreferences]);
 
   return {
     stepIndex,

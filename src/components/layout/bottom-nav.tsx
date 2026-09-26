@@ -18,8 +18,8 @@ import {
 import { Button, ButtonLink } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useTheme } from "@/hooks/use-theme";
-import { useAppDispatch, useAppSelector } from "@/store";
-import { logoutRequest } from "@/store/slices/authSlice";
+import { useLogoutMutation } from "@/store/api/auth-api";
+import { useAppSelector } from "@/store";
 import { SETTINGS_ROOT_ITEM } from "@/lib/constants/settings";
 import { cn } from "@/lib/utils";
 
@@ -31,17 +31,15 @@ const navigation = [
 
 export function BottomNav() {
   const pathname = usePathname();
-  const dispatch = useAppDispatch();
-  const { isAuthenticated, user, status } = useAppSelector(
-    (state) => state.auth,
-  );
+  const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
   const { theme } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const SettingsIcon = SETTINGS_ROOT_ITEM.icon;
 
   const handleLogout = () => {
-    dispatch(logoutRequest());
+    void logout();
   };
 
   return (
@@ -209,10 +207,10 @@ export function BottomNav() {
                         handleLogout();
                         setIsMenuOpen(false);
                       }}
-                      disabled={status === "loading"}
+                      disabled={isLoggingOut}
                       className="w-full justify-center gap-2 text-status-error border-status-error/30 hover:bg-status-error/10 hover:text-status-error"
                     >
-                      {status === "loading" ? (
+                      {isLoggingOut ? (
                         <>
                           <Loader2 className="size-4 animate-spin" />
                           <span>Logout</span>

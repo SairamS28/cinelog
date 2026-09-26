@@ -3,8 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchShortcut } from "@/hooks/search-popup/use-search-shortcut";
 import type { SearchMediaType } from "@/components/search-popup/search-controls";
-import { searchCleared, searchRequested } from "@/store/slices/searchSlice";
-import { useAppDispatch, useAppSelector } from "@/store";
+import { apiErrorMessage } from "@/store/api/base-api";
+import {
+  useSearchQuery,
+  type SearchArgs,
+  type SearchStatus,
+} from "@/store/api/search-api";
 
 export function useSearchDialog() {
   const [open, setOpen] = useState(false);
@@ -13,23 +17,11 @@ export function useSearchDialog() {
   const [year, setYear] = useState<number>();
   const [language, setLanguage] = useState<string>();
   const [page, setPage] = useState(1);
-  const dispatch = useAppDispatch();
-  const searchState = useAppSelector((state) => state.search[mediaType]);
+  const [request, setRequest] = useState<SearchArgs | null>(null);
 
-  const requestSearch = useCallback(
-    (nextPage: number, nextQuery = query.trim()) => {
-      dispatch(
-        searchRequested({
-          mediaType,
-          query: nextQuery,
-          year,
-          language,
-          page: nextPage,
-        }),
-      );
-    },
-    [dispatch, language, mediaType, query, year],
-  );
+  const result = useSearchQuery(request ?? { mediaType, query: "", page: 1 }, {
+    skip: request === null,
+  });
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -39,6 +31,7 @@ export function useSearchDialog() {
       setYear(undefined);
       setLanguage(undefined);
       setPage(1);
+      setRequest(null);
     }
   }, []);
 
@@ -65,41 +58,75 @@ export function useSearchDialog() {
   const handlePageChange = useCallback(
     (nextPage: number) => {
       setPage(nextPage);
-      requestSearch(nextPage);
+      const normalizedQuery = query.trim();
+      if (!normalizedQuery) return;
+      setRequest({
+        mediaType,
+        query: normalizedQuery,
+        year,
+        language,
+        page: nextPage,
+      });
     },
-    [requestSearch],
+    [language, mediaType, query, year],
   );
 
   useSearchShortcut(
     useCallback(() => handleOpenChange(!open), [handleOpenChange, open]),
   );
 
-  const showPagination =
-    searchState.total_pages > 1 &&
-    (searchState.status === "success" || searchState.status === "loading");
-
   useEffect(() => {
-    const normalizedQuery = query.trim();
-
-    if (normalizedQuery.length <= 0) {
-      dispatch(searchCleared(mediaType));
-      return;
-    }
-
     const timeoutId = window.setTimeout(() => {
-      dispatch(
-        searchRequested({
-          mediaType,
-          query: normalizedQuery,
-          year,
-          language,
-          page: 1,
-        }),
+      const normalizedQuery = query.trim();
+      setRequest(
+        normalizedQuery
+          ? { mediaType, query: normalizedQuery, year, language, page: 1 }
+          : null,
       );
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [dispatch, language, mediaType, query, year]);
+  }, [language, mediaType, query, year]);
+
+  const status: SearchStatus = request
+    ? result.isError
+      ? "failed"
+      : result.isFetching
+        ? "loading"
+        : result.isSuccess
+          ? "success"
+          : "idle"
+    : "idle";
+
+  const searchState = {
+    query: request?.query ?? "",
+    results: status === "loading" ? [] : (result.currentData?.results ?? []),
+    total_pages: result.currentData?.total_pages ?? 0,
+    page: result.currentData?.page ?? page,
+    status,
+    error: result.isError
+      ? apiErrorMessage(result.error, "Search request failed")
+      : undefined,
+  };
+
+  const showPagination =
+    searchState.total_pages > 1 &&
+    (searchState.status === "success" || searchState.status === "loading");
+
+  const requestSearch = useCallback(
+    (nextPage: number, nextQuery = query.trim()) => {
+      if (!nextQuery) return;
+      setPage(nextPage);
+      setRequest({
+        mediaType,
+        query: nextQuery,
+        year,
+        language,
+        page: nextPage,
+      });
+    },
+    [language, mediaType, query, year],
+  );
 
   return {
     open,

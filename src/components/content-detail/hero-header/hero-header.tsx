@@ -6,7 +6,7 @@ import { MetaRow } from "@/components/content-detail/hero-header/meta-row";
 import { PosterPanel } from "@/components/content-detail/hero-header/poster-panel";
 import type { MovieDetails, SeriesDetails } from "@/lib/types";
 import { orFallback } from "@/lib/utils";
-import { useAppSelector } from "@/store";
+import { useContentMutationState } from "@/hooks/title-details/use-content-mutation-state";
 import Image from "next/image";
 
 type HeroHeaderProps = {
@@ -18,11 +18,7 @@ type HeroHeaderProps = {
 export function HeroHeader({ movie, series, type }: HeroHeaderProps) {
   const mediaType: "movie" | "series" = type ?? (movie ? "movie" : "series");
   const mediaId = movie?.id ?? series?.id;
-  const entry = useAppSelector((state) =>
-    mediaId === undefined
-      ? undefined
-      : state.contentDetails[mediaType][String(mediaId)],
-  );
+  const entry = useContentMutationState(mediaType, mediaId);
   const title = orFallback(movie?.title || series?.name);
   const tagline = movie?.tagline?.trim() || series?.tagline?.trim();
   const genres = movie?.genres ?? series?.genres;

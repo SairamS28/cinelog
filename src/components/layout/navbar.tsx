@@ -6,19 +6,17 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useTheme } from "@/hooks/use-theme";
-import { useAppSelector, useAppDispatch } from "@/store";
-import { logoutRequest } from "@/store/slices/authSlice";
+import { useLogoutMutation } from "@/store/api/auth-api";
+import { useAppSelector } from "@/store";
 
 export function Navbar() {
-  const dispatch = useAppDispatch();
-  const { isAuthenticated, user, status } = useAppSelector(
-    (state) => state.auth,
-  );
+  const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
   const { theme, mounted } = useTheme();
   const isDark = mounted ? theme === "dark" : true;
 
   const handleLogout = () => {
-    dispatch(logoutRequest());
+    void logout();
   };
 
   return (
@@ -50,9 +48,9 @@ export function Navbar() {
               variant="dark"
               onClick={handleLogout}
               className="hover:bg-status-error/80! px-4 py-2 text-sm gap-2"
-              disabled={status === "loading"}
+              disabled={isLoggingOut}
             >
-              {status === "loading" ? (
+              {isLoggingOut ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Logout</span>

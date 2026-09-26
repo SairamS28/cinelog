@@ -1,14 +1,12 @@
 "use client";
 
-import { useState } from "react";
-
 import { ProgressActions } from "@/components/content-detail/progress/progress-actions";
 import { ProgressMetrics } from "@/components/content-detail/progress/progress-metrics";
 import { ProgressStatus } from "@/components/content-detail/progress/progress-status";
 import { useProgressSeasons } from "@/hooks/title-details/use-progress-seasons";
 import { canUpdateSeriesWatchActivity } from "@/lib/media/status";
 import type { SeriesDetails } from "@/lib/types";
-import { useAppSelector } from "@/store";
+import { useContentMutationState } from "@/hooks/title-details/use-content-mutation-state";
 
 type ContentProgressProps = {
   series?: SeriesDetails | null;
@@ -20,18 +18,8 @@ export function ContentProgress({
   type = "series",
 }: ContentProgressProps) {
   const mediaId = series?.id;
-  const entry = useAppSelector((state) =>
-    mediaId === undefined
-      ? undefined
-      : state.contentDetails.series[String(mediaId)],
-  );
-  const { defaultSeasonNumber, seasons } = useProgressSeasons(series);
-  const [pickedSeason, setPickedSeason] = useState<number | null>(null);
-  const selectedSeason =
-    pickedSeason !== null &&
-    seasons.some((season) => season.seasonNumber === pickedSeason)
-      ? pickedSeason
-      : defaultSeasonNumber;
+  const entry = useContentMutationState("series", mediaId);
+  const { seasons, selectedSeason, setSelectedSeason } = useProgressSeasons(series);
   const selectedSeasonDetails = seasons.find(
     (season) => season.seasonNumber === selectedSeason,
   );
@@ -53,7 +41,7 @@ export function ContentProgress({
             disabled={isWatchActivityDisabled}
             seasons={seasons}
             selectedSeason={selectedSeason}
-            onSeasonChange={setPickedSeason}
+            onSeasonChange={setSelectedSeason}
           />
           <div className="mt-5 h-px w-full bg-outline-variant" />
           <div className="mt-5">

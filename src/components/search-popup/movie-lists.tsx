@@ -3,7 +3,7 @@ import type {
   SearchMediaType,
   SearchResult,
   SearchStatus,
-} from "@/store/slices/searchSlice";
+} from "@/store/api/search-api";
 
 type MovieListsProps = {
   mediaType: SearchMediaType;

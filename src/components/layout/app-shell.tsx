@@ -5,12 +5,10 @@ import { BottomNav } from "@/components/layout/bottom-nav";
 import { Navbar } from "@/components/layout/navbar";
 import { Sidebar } from "@/components/layout/sidebar";
 import { SearchDialog } from "@/components/search-popup/search-dialog";
-import { LocalesProvider } from "@/hooks/locales/use-locales";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <LocalesProvider>
-      <div className="flex min-h-screen bg-surface text-on-surface">
+    <div className="flex min-h-screen bg-surface text-on-surface">
         <Sidebar />
         <div className="min-w-0 flex-1 pb-18 lg:pb-0 lg:pl-58">
           <Navbar />
@@ -19,6 +17,5 @@ export function AppShell({ children }: { children: ReactNode }) {
         <BottomNav />
         <SearchDialog />
       </div>
-    </LocalesProvider>
   );
 }

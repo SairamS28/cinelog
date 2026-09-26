@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useAppDispatch } from "@/store";
-import { userUpdated, type User } from "@/store/slices/authSlice";
-import { apiFetch } from "@/lib/http/client";
+import type { User } from "@/store/slices/authSlice";
+import { apiErrorMessage } from "@/store/api/base-api";
+import { useUpdateProfileMutation } from "@/store/api/user-api";
 import { updateProfileSchema } from "@/lib/validations/auth";
 
 function profileErrorMessage(data: { error?: string; details?: unknown }) {
@@ -24,14 +24,13 @@ function profileErrorMessage(data: { error?: string; details?: unknown }) {
 }
 
 export function useProfileForm(user: User | null) {
-  const dispatch = useAppDispatch();
+  const [updateProfile, { isLoading }] = useUpdateProfileMutation();
   const [username, setUsername] = useState(user?.username || "");
   const [email, setEmail] = useState(user?.email || "");
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -72,36 +71,23 @@ export function useProfileForm(user: User | null) {
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      const res = await apiFetch("/api/user/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed.data),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErrorMessage(profileErrorMessage(data));
-        setIsLoading(false);
-        return;
-      }
-
-      const updatedUser = data.user ?? data.data?.user;
-      if (updatedUser) {
-        dispatch(userUpdated({ user: updatedUser }));
-      }
-
+      await updateProfile(parsed.data).unwrap();
       setSuccessMessage("Profile updated successfully.");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch {
-      setErrorMessage("A network error occurred. Please try again.");
-    } finally {
-      setIsLoading(false);
+    } catch (error) {
+      const apiError =
+        error && typeof error === "object"
+          ? (error as { message?: string; details?: unknown })
+          : undefined;
+      setErrorMessage(
+        profileErrorMessage({
+          error: apiError?.message,
+          details: apiError?.details,
+        }) || apiErrorMessage(error, "A network error occurred. Please try again."),
+      );
     }
   }
 

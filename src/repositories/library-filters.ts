@@ -331,6 +331,7 @@ export function libraryOrderBy(
   }
 
   orders.push(sortExpression(mediaType, query) as SQL);
+  orders.push(asc(mediaType === "movie" ? userMovies.id : userSeries.id));
   return orders;
 }
 
@@ -349,7 +350,8 @@ export function librarySortOrder(
   mediaType: "movie" | "series",
   query: LibraryQueryInput,
 ) {
-  return [sortExpression(mediaType, query) as SQL];
+  const user = mediaType === "movie" ? userMovies : userSeries;
+  return [sortExpression(mediaType, query) as SQL, asc(user.id)];
 }
 
 export function libraryGroupMatch(
